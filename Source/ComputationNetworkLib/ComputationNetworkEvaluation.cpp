@@ -943,6 +943,12 @@ void ComputationNetwork::InitMemorySwapping(const std::vector<ComputationNodeBas
         }
     }
 
+    std::unordered_map<ComputationNodeBase*,int> node2TimeStep;
+    for(int i = 0; i < compositeForwardPropEvalOrder.size(); i++)
+        node2TimeStep[compositeForwardPropEvalOrder[i].get()] = i;
+        
+        
+
     // create a child2parents map for all nodes
     std::unordered_map<Matrix<ElemType>*, std::unordered_set<Matrix<ElemType>*>> child2parents;
     std::unordered_map<Matrix<ElemType>*, std::unordered_set<Matrix<ElemType>*>> matrix2LoopMembers;
@@ -1207,7 +1213,8 @@ void ComputationNetwork::InitMemorySwapping(const std::vector<ComputationNodeBas
         m_networkInfo->GetSwapManager<ElemType>()->InitializeSwapping(
                                  forwardSwapOutDependencyNode2matrices,
                                  backwardSwapInDependencyNode2matrices,
-                                 lastBackwardsDependencyNode2matrices);
+                                 lastBackwardsDependencyNode2matrices,
+                                 node2TimeStep);
 	
 }
 // this function will need to be called before actual validation and execution to

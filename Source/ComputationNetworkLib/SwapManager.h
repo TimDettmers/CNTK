@@ -43,10 +43,17 @@ private:
     std::unordered_map<ComputationNodeBase*, std::vector<SwapAction<ElemType>*> > m_node2ForwardSwapOut;
     std::unordered_map<ComputationNodeBase*, std::vector<SwapAction<ElemType>*> > m_node2BackwardSwapin;
     std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > m_node2BackwardFree;
+    std::unordered_map<ComputationNodeBase*, int> m_node2TimeStep;
+    std::unordered_map<int, ComputationNodeBase*> m_timeStep2Node;
 
     bool m_useMemorySwapping;
+    float m_freeMemoryBase;
+    float m_totalMemoryBase;
 
     void CleanUp();
+    std::unordered_map<int,float> CumulativeMemory(int startStep, int endStep);
+    float Bytes2GB(size_t bytes);
+    int m_maxTimeStep;
 public:
     SwapManager();
     ~SwapManager(){};
@@ -57,7 +64,7 @@ public:
     void ClearActionsAndTheirMemory();
     void InitializeSwapping(std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > forwardSwapOutNodes2matrices,
     std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > backwardSwapInNodes2matrices,
-    std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > lastBackwardNodes2matrices);
+    std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > lastBackwardNodes2matrices, std::unordered_map<ComputationNodeBase*, int> node2TimeStep);
 
 };
 

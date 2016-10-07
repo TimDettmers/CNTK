@@ -31,6 +31,12 @@ inline float MeasurementUncertainty(){ return 1.15f; }
 template <typename ElemType> SwapManager<ElemType>::SwapManager()
 {
         m_useMemorySwapping = g_useMemorySwapping;
+#ifndef CPUONLY
+        size_t free, total;
+        CUDA_CALL(cudaMemGetInfo(&free, &total));
+        m_freeMemoryBase = Bytes2GB(free);
+        m_totalMemoryBase = Bytes2GB(total);
+#endif
 }
 
 template <typename ElemType> void SwapManager<ElemType>::CleanUp()
@@ -79,11 +85,59 @@ template<typename ElemType> void SwapManager<ElemType>::EndSynchronizeState(Comp
 #endif
 }
 
+template <typename ElemType> float SwapManager<ElemType>::Bytes2GB(size_t bytes) 
+{
+    return ((float)bytes)/1024.0f/1024.0f/1024.0f;
+}
+
+template <typename ElemType> std::unordered_map<int,float> SwapManager<ElemType>::CumulativeMemory(int startStep, int endStep)
+{
+    int i = startStep;
+    bool forwardMode = true;
+    float swapInSize = 0.0f;
+    float swapOutSize = 0.0f;
+    float freedSize = 0.0f;
+    std::unordered_map<int, float> step2CumulativeMemory;
+
+    assert(endStep <= m_maxTimeStep);
+    assert(startStep <= m_maxTimeStep);
+
+    if(startStep == m_maxTimeStep){ forwardMode = false; }
+    while(i != endStep)
+    {
+
+        ComputationNodeBase* node = m_timeStep2Node[i];
+
+        if(forwardMode)
+        {
+            for(auto swapOut : m_node2ForwardSwapOut[node])
+                swapOutSize += Bytes2GB(swapOut->GetGPUMatrix()->BufferSize());
+        }
+        else
+        {
+            for(auto swapIn : m_node2BackwardSwapin[node])
+                swapInSize += Bytes2GB(swapIn->GetGPUMatrix()->BufferSize());
+
+            for(auto freed : m_node2BackwardFree[node])
+                freedSize += Bytes2GB(freed->BufferSize());
+        }
+
+        step2CumulativeMemory[i] = m_freeMemoryBase + swapInSize - swapOutSize - freedSize;
+
+        if(m_timeStep2Node.count(i+1) == 0){ forwardMode = false; }
+        if(forwardMode){ i++; }
+        else{ i--; }
+
+    }
+
+    return step2CumulativeMemory;
+}
+
 
 template <typename ElemType> void SwapManager<ElemType>::InitializeSwapping(
     std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > forwardSwapOutNodes2matrices,
     std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > backwardSwapInNodes2matrices,
-    std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > lastBackwardNodes2matrices)
+    std::unordered_map<ComputationNodeBase*, std::vector<Matrix<ElemType>*> > lastBackwardNodes2matrices, std::unordered_map<ComputationNodeBase*, int> node2TimeStep)
 {
 
     ClearActionsAndTheirMemory();
@@ -124,6 +178,17 @@ template <typename ElemType> void SwapManager<ElemType>::InitializeSwapping(
 
     // setup free "actions" (this is just a resize)
     m_node2BackwardFree = lastBackwardNodes2matrices;
+
+    assert(forwardSwapOutNodes2matrices.size() == backwardSwapInNodes2matrices.size());
+    m_node2TimeStep = node2TimeStep;
+
+    for(auto pair : node2TimeStep)
+        m_timeStep2Node[pair.second] = pair.first;
+
+    m_maxTimeStep = 0;
+    for(auto pair : node2TimeStep)
+        m_maxTimeStep = pair.second > m_maxTimeStep ? pair.second : m_maxTimeStep;
+        
 
 }
 
